@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import type { CSSProperties } from "react";
 import { Briefcase, Cpu, TrendingUp, type LucideProps } from "lucide-react";
-import { Analytics } from "@vercel/analytics/react";
-import { track } from "@vercel/analytics";
+import posthog from "posthog-js";
+
+// Initialize PostHog once on the client.
+// Keys are read from Vite env vars so nothing secret is committed to the repo.
+const phApiKey = import.meta.env.VITE_POSTHOG_PROJECT_TOKEN;
+const phApiHost = import.meta.env.VITE_POSTHOG_HOST;
+
+if (typeof window !== "undefined" && phApiKey && phApiHost) {
+  posthog.init(phApiKey, {
+    api_host: phApiHost,
+    person_profiles: "identified_only",
+  });
+}
 
 type ProgramId = "management" | "finance" | "ai";
 type TraitId =
@@ -1004,7 +1015,7 @@ function Results({ answers, onRetake, onHome }: { answers: number[]; onRetake: (
 
   // Track conversion: fires once when the results screen mounts.
   useEffect(() => {
-    track("quiz_completed", {
+    posthog.capture("quiz_completed", {
       recommended_program: top.shortTitle,
       match_percentage: result.compatibility[top.id],
     });
@@ -1195,14 +1206,14 @@ export default function App() {
   }, [screen]);
 
   const startQuiz = () => {
-    track("quiz_started");
+    posthog.capture("quiz_started");
     setAnswers([]);
     setCurrent(0);
     setScreen("quiz");
   };
 
   const retakeQuiz = () => {
-    track("quiz_retake");
+    posthog.capture("quiz_retake");
     setAnswers([]);
     setCurrent(0);
     setScreen("quiz");
@@ -1220,7 +1231,7 @@ export default function App() {
     if (answers[current] === undefined) return;
 
     // Track progress/drop-off: which question was just answered.
-    track("question_answered", {
+    posthog.capture("question_answered", {
       question_index: current + 1,
       category: questions[current].category,
     });
@@ -1238,33 +1249,20 @@ export default function App() {
 
   if (screen === "quiz") {
     return (
-      <>
-        <Quiz
-          answers={answers}
-          current={current}
-          onAnswer={answerQuestion}
-          onBack={backQuestion}
-          onNext={nextQuestion}
-          onExit={() => setScreen("intro")}
-        />
-        <Analytics />
-      </>
+      <Quiz
+        answers={answers}
+        current={current}
+        onAnswer={answerQuestion}
+        onBack={backQuestion}
+        onNext={nextQuestion}
+        onExit={() => setScreen("intro")}
+      />
     );
   }
 
   if (screen === "results") {
-    return (
-      <>
-        <Results answers={answers as number[]} onRetake={retakeQuiz} onHome={() => setScreen("intro")} />
-        <Analytics />
-      </>
-    );
+    return <Results answers={answers as number[]} onRetake={retakeQuiz} onHome={() => setScreen("intro")} />;
   }
 
-  return (
-    <>
-      <Intro onStart={startQuiz} />
-      <Analytics />
-    </>
-  );
+  return <Intro onStart={startQuiz} />;
 }
