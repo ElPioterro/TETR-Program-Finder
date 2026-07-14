@@ -2190,52 +2190,56 @@ function Results({
 
     const ranked = [...programOrder].sort((a, b) => totals[b] - totals[a]);
 
-    // Contrast-stretch compatibility scores so the winner clearly separates from runners-up.
-    const rawScores = programOrder.map((id) => totals[id]);
-    const rawMax = Math.max(...rawScores);
-    const rawMin = Math.min(...rawScores);
-    const rawSpread = rawMax - rawMin || 1;
+    // 1. Dynamically calculate the theoretical maximum score for the quiz
+    const maxPossibleScore = questions.reduce((acc, q) => {
+      const maxQ = Math.max(
+        ...q.options.map((o) =>
+          Math.max(o.scores.management, o.scores.finance, o.scores.ai),
+        ),
+      );
+      return acc + maxQ;
+    }, 0);
 
-    // Normalize every score to [0, 1] based on the session's min and max.
-    const normalized: ProgramScores = Object.fromEntries(
-      programOrder.map((id) => [id, (totals[id] - rawMin) / rawSpread]),
-    ) as ProgramScores;
-
-    // Winner lands in 85–96% depending on absolute raw performance.
-    // Runners-up are compressed toward 35–70% proportional to their gap behind the winner.
-    const topScore = totals[ranked[0]];
-    const absoluteCeiling = questions.length * 6; // new per-question ceiling after rebalancing
-    const topStrength = Math.min(1, topScore / absoluteCeiling);
-    const winnerFloor = 85;
-    const winnerCeiling = 96;
-    const winnerMin = Math.round(
-      winnerFloor + (winnerCeiling - winnerFloor) * topStrength,
-    );
-
-    const runnerMax = 70;
-    const runnerMin = 35;
-
-    const compatibility = Object.fromEntries(
-      programOrder.map((id) => {
-        const isWinner = id === ranked[0];
-        const value = isWinner
-          ? Math.round(winnerMin + (winnerCeiling - winnerMin) * normalized[id])
-          : Math.round(runnerMin + (runnerMax - runnerMin) * normalized[id]);
-        return [id, value];
-      }),
+    // 2. Calculate the raw match percentage for each program
+    const rawPercentages = Object.fromEntries(
+      programOrder.map((id) => [
+        id,
+        Math.round((totals[id] / maxPossibleScore) * 100),
+      ]),
     ) as Record<ProgramId, number>;
 
-    // Ensure ties are handled gracefully: if the top two raw scores are equal,
-    // both receive the same rounded winner-tier value.
-    if (totals[ranked[0]] === totals[ranked[1]]) {
-      compatibility[ranked[1]] = compatibility[ranked[0]];
-    }
+    const winnerId = ranked[0];
+    const winnerRaw = rawPercentages[winnerId];
+
+    // 3. Scale the winner's score to a satisfying range (e.g., raw 60% becomes 81%, and 100% remains 100%)
+    const finalWinnerScore = Math.min(100, Math.round(52 + winnerRaw * 0.48));
+
+    // 4. Apply an exponential curve to calculate scores for the second and third places
+    const compatibility = Object.fromEntries(
+      programOrder.map((id) => {
+        if (id === winnerId) {
+          return [id, finalWinnerScore];
+        }
+        // Ratio of the current program's score to the winner's score
+        const relativeRatio = rawPercentages[id] / (winnerRaw || 1);
+
+        // Raise to the power of 1.35 to gently stretch contrast and prevent overlapping results
+        const stretchedRatio = Math.pow(relativeRatio, 1.35);
+        const scoreValue = Math.max(
+          30,
+          Math.round(finalWinnerScore * stretchedRatio),
+        );
+
+        return [id, scoreValue];
+      }),
+    ) as Record<ProgramId, number>;
 
     const topTraits = (Object.entries(traitTotals) as [TraitId, number][])
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
       .map(([id]) => id);
-    const recommendation = programs[ranked[0]];
+
+    const recommendation = programs[winnerId];
     const courses = [...recommendation.courses]
       .map((course, index) => ({
         ...course,
