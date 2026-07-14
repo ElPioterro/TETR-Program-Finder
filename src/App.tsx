@@ -2188,42 +2188,49 @@ function Results({
       });
     });
 
-    const ranked = [...programOrder].sort((a, b) => totals[b] - totals[a]);
+    // 1. Calculate the theoretical maximum score for each program independently
+    const maxScores: Record<ProgramId, number> = {
+      management: questions.reduce(
+        (acc, q) =>
+          acc + Math.max(...q.options.map((o) => o.scores.management)),
+        0,
+      ),
+      finance: questions.reduce(
+        (acc, q) => acc + Math.max(...q.options.map((o) => o.scores.finance)),
+        0,
+      ),
+      ai: questions.reduce(
+        (acc, q) => acc + Math.max(...q.options.map((o) => o.scores.ai)),
+        0,
+      ),
+    };
 
-    // 1. Dynamically calculate the theoretical maximum score for the quiz
-    const maxPossibleScore = questions.reduce((acc, q) => {
-      const maxQ = Math.max(
-        ...q.options.map((o) =>
-          Math.max(o.scores.management, o.scores.finance, o.scores.ai),
-        ),
-      );
-      return acc + maxQ;
-    }, 0);
-
-    // 2. Calculate the raw match percentage for each program
+    // 2. Calculate the raw match percentage for each program on its own scale
     const rawPercentages = Object.fromEntries(
       programOrder.map((id) => [
         id,
-        Math.round((totals[id] / maxPossibleScore) * 100),
+        Math.round((totals[id] / (maxScores[id] || 1)) * 100),
       ]),
     ) as Record<ProgramId, number>;
+
+    // 3. Sort the ranking based on the calculated percentages
+    const ranked = [...programOrder].sort(
+      (a, b) => rawPercentages[b] - rawPercentages[a],
+    );
 
     const winnerId = ranked[0];
     const winnerRaw = rawPercentages[winnerId];
 
-    // 3. Scale the winner's score to a satisfying range (e.g., raw 60% becomes 81%, and 100% remains 100%)
+    // 4. Scale the winner's score to a satisfying range
     const finalWinnerScore = Math.min(100, Math.round(52 + winnerRaw * 0.48));
 
-    // 4. Apply an exponential curve to calculate scores for the second and third places
+    // 5. Apply an exponential curve to calculate scores for the second and third places
     const compatibility = Object.fromEntries(
       programOrder.map((id) => {
         if (id === winnerId) {
           return [id, finalWinnerScore];
         }
-        // Ratio of the current program's score to the winner's score
         const relativeRatio = rawPercentages[id] / (winnerRaw || 1);
-
-        // Raise to the power of 1.35 to gently stretch contrast and prevent overlapping results
         const stretchedRatio = Math.pow(relativeRatio, 1.35);
         const scoreValue = Math.max(
           30,
@@ -2233,6 +2240,11 @@ function Results({
         return [id, scoreValue];
       }),
     ) as Record<ProgramId, number>;
+
+    // Handle ties if the top two programs have the same raw percentage
+    if (rawPercentages[ranked[0]] === rawPercentages[ranked[1]]) {
+      compatibility[ranked[1]] = compatibility[ranked[0]];
+    }
 
     const topTraits = (Object.entries(traitTotals) as [TraitId, number][])
       .sort((a, b) => b[1] - a[1])
