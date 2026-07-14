@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
 import type { CSSProperties } from "react";
 import { Briefcase, Cpu, TrendingUp, type LucideProps } from "lucide-react";
+import { Analytics } from "@vercel/analytics/react";
+import { track } from "@vercel/analytics";
 
 type ProgramId = "management" | "finance" | "ai";
 type TraitId =
@@ -1000,6 +1002,16 @@ function Results({ answers, onRetake, onHome }: { answers: number[]; onRetake: (
 
   const top = result.recommendation;
 
+  // Track conversion: fires once when the results screen mounts.
+  useEffect(() => {
+    track("quiz_completed", {
+      recommended_program: top.shortTitle,
+      match_percentage: result.compatibility[top.id],
+    });
+    // Intentionally fire only on mount; eslint-disable ensures a single conversion event per result.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <main className="results-enter text-[var(--tetr-black)]" style={{ background: "var(--tetr-white)" }}>
       <section className="result-hero relative overflow-hidden px-5 pb-16 pt-6 text-white sm:px-9 sm:pb-24 lg:px-12" style={{ background: "var(--tetr-primary)" }}>
@@ -1183,6 +1195,14 @@ export default function App() {
   }, [screen]);
 
   const startQuiz = () => {
+    track("quiz_started");
+    setAnswers([]);
+    setCurrent(0);
+    setScreen("quiz");
+  };
+
+  const retakeQuiz = () => {
+    track("quiz_retake");
     setAnswers([]);
     setCurrent(0);
     setScreen("quiz");
@@ -1198,6 +1218,13 @@ export default function App() {
 
   const nextQuestion = () => {
     if (answers[current] === undefined) return;
+
+    // Track progress/drop-off: which question was just answered.
+    track("question_answered", {
+      question_index: current + 1,
+      category: questions[current].category,
+    });
+
     if (current === questions.length - 1) {
       setScreen("results");
       return;
@@ -1211,20 +1238,33 @@ export default function App() {
 
   if (screen === "quiz") {
     return (
-      <Quiz
-        answers={answers}
-        current={current}
-        onAnswer={answerQuestion}
-        onBack={backQuestion}
-        onNext={nextQuestion}
-        onExit={() => setScreen("intro")}
-      />
+      <>
+        <Quiz
+          answers={answers}
+          current={current}
+          onAnswer={answerQuestion}
+          onBack={backQuestion}
+          onNext={nextQuestion}
+          onExit={() => setScreen("intro")}
+        />
+        <Analytics />
+      </>
     );
   }
 
   if (screen === "results") {
-    return <Results answers={answers as number[]} onRetake={startQuiz} onHome={() => setScreen("intro")} />;
+    return (
+      <>
+        <Results answers={answers as number[]} onRetake={retakeQuiz} onHome={() => setScreen("intro")} />
+        <Analytics />
+      </>
+    );
   }
 
-  return <Intro onStart={startQuiz} />;
+  return (
+    <>
+      <Intro onStart={startQuiz} />
+      <Analytics />
+    </>
+  );
 }
