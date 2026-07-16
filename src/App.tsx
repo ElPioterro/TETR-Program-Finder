@@ -2370,7 +2370,11 @@ function Results({
               </div>
             </div>
           </div>
-          <div className="mt-14 grid gap-6 border-t border-white/20 pt-6 md:grid-cols-[1fr_1fr] md:gap-14">
+          {/* Watermark 1 — subtle domain signature */}
+          <div className="mt-10 flex justify-start select-none pointer-events-none font-mono text-[11px] tracking-[0.18em] text-white/20 uppercase">
+            tetr-program-finder.vercel.app
+          </div>
+          <div className="mt-4 grid gap-6 border-t border-white/20 pt-6 md:grid-cols-[1fr_1fr] md:gap-14">
             <p className="text-xl font-medium tracking-[-0.03em] sm:text-2xl text-white">
               {top.lens}
             </p>
@@ -2522,15 +2526,22 @@ function Results({
                   </div>
                 );
               })}
-              <p
-                className="border-t pt-6 text-xs leading-5 text-neutral-500"
-                style={{ borderColor: "var(--tetr-border-strong)" }}
-              >
-                Tetr Program Finder is an open-source reflection tool, not an
-                admissions assessment. Use the result to focus your research,
-                then compare faculty, workload, internships, and career outcomes
-                before deciding.
-              </p>
+              <div className="pt-4 space-y-4">
+                {/* Watermark 2 — subtle domain signature */}
+                <div className="flex justify-start select-none pointer-events-none font-mono text-[10px] tracking-[0.18em] text-neutral-400/50 uppercase">
+                  tetr-program-finder.vercel.app
+                </div>
+
+                <p
+                  className="border-t pt-4 text-xs leading-5 text-neutral-500"
+                  style={{ borderColor: "var(--tetr-border-strong)" }}
+                >
+                  Tetr Program Finder is an open-source reflection tool, not an
+                  admissions assessment. Use the result to focus your research,
+                  then compare faculty, workload, internships, and career
+                  outcomes before deciding.
+                </p>
+              </div>
             </div>
           </div>
         </div>
